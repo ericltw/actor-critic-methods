@@ -6,17 +6,22 @@ import torch.optim as optim
 import numpy as np
 
 class CriticNetwork(nn.Module):
+    # beta: learning rate.
     def __init__(self, beta, input_dims, fc1_dims, fc2_dims, n_actions,
             name, chkpt_dir='tmp/td3'):
         super(CriticNetwork, self).__init__()
+        # Used for building neural networks.
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
+        # Number of action dimensions.
         self.n_actions = n_actions
+
         self.name = name
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_td3')
 
+        # Build neural networks.
         # I think this breaks if the env has a 2D state representation
         self.fc1 = nn.Linear(self.input_dims[0] + n_actions, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
@@ -46,21 +51,27 @@ class CriticNetwork(nn.Module):
         self.load_state_dict(T.load(self.checkpoint_file))
 
 class ActorNetwork(nn.Module):
+    # alpha: learning rate.
     def __init__(self, alpha, input_dims, fc1_dims, fc2_dims,
             n_actions, name, chkpt_dir='tmp/td3'):
         super(ActorNetwork, self).__init__()
+        # Used for building neural networks.
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
+        # Number of action dimensions.
         self.n_actions = n_actions
+        
         self.name = name
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_td3')
 
+        # Build neural networks.
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
         self.mu = nn.Linear(self.fc2_dims, self.n_actions)
 
+        # Init optimizer.
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
 

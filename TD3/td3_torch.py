@@ -10,17 +10,26 @@ class Agent():
             gamma=0.99, update_actor_interval=2, warmup=1000,
             n_actions=2, max_size=1000000, layer1_size=400,
             layer2_size=300, batch_size=100, noise=0.1):
+        # TODO
         self.gamma = gamma
+        # For update target network parameters.
         self.tau = tau
+        # Upper & lower bound action value.
         self.max_action = env.action_space.high
         self.min_action = env.action_space.low
+        # Init replay buffer.
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
+        # Sampling size of replay buffer.
         self.batch_size = batch_size
+        self.n_actions = n_actions
+
+        # For controlling learning step.
         self.learn_step_cntr = 0
+        self.update_actor_iter = update_actor_interval
+        
+        # For warmup.
         self.time_step = 0
         self.warmup = warmup
-        self.n_actions = n_actions
-        self.update_actor_iter = update_actor_interval
 
         self.actor = ActorNetwork(alpha, input_dims, layer1_size,
                                   layer2_size, n_actions=n_actions,
@@ -42,28 +51,38 @@ class Agent():
                                          layer2_size, n_actions=n_actions,
                                          name='target_critic_2')
 
+        # TODO
         self.noise = noise
         self.update_network_parameters(tau=1)
 
     def choose_action(self, observation):
+        # Radom the action while warm up.
         if self.time_step < self.warmup:
             mu = T.tensor(np.random.normal(scale=self.noise, size=(self.n_actions,)))
         else:
             state = T.tensor(observation, dtype=T.float).to(self.actor.device)
             mu = self.actor.forward(state).to(self.actor.device)
+        
+        # Add noise to action.
         mu_prime = mu + T.tensor(np.random.normal(scale=self.noise),
                 dtype=T.float).to(self.actor.device)
+        # Clamp all elements of action into the range(min_action, max_action)
         mu_prime = T.clamp(mu_prime, self.min_action[0], self.max_action[0])
+        
         self.time_step += 1
+        
         return mu_prime.cpu().detach().numpy()
 
+    # Store transition to replay buffer.
     def remember(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
 
+    # Core training method.
     def learn(self):
         if self.memory.mem_cntr < self.batch_size:
             return
 
+        # 從replay buffer sample transition.
         state, action, reward, new_state, done = \
                 self.memory.sample_buffer(self.batch_size)
 
@@ -73,15 +92,18 @@ class Agent():
         state = T.tensor(state, dtype=T.float).to(self.critic_1.device)
         action = T.tensor(action, dtype=T.float).to(self.critic_1.device)
 
+        # 讓目標策略網路做預測(1)
         target_actions = self.target_actor.forward(state_)
         target_actions = target_actions + \
                 T.clamp(T.tensor(np.random.normal(scale=0.2)), -0.5, 0.5)
         # might break if elements of min and max are not all equal
         target_actions = T.clamp(target_actions, self.min_action[0], self.max_action[0])
 
+        # 讓兩個目標價值網路做預測 (2)
         q1_ = self.target_critic_1.forward(state_, target_actions)
         q2_ = self.target_critic_2.forward(state_, target_actions)
 
+        # 讓兩個價值網路做預測 (4)
         q1 = self.critic_1.forward(state, action)
         q2 = self.critic_2.forward(state, action)
 
@@ -93,17 +115,23 @@ class Agent():
 
         critic_value_ = T.min(q1_, q2_)
 
+        # 計算TD目標 (3)
         target = reward + self.gamma*critic_value_
         target = target.view(self.batch_size, 1)
 
+        # 更新價值網路 (6)
         self.critic_1.optimizer.zero_grad()
         self.critic_2.optimizer.zero_grad()
 
+        # 計算TD誤差 (5)
         q1_loss = F.mse_loss(target, q1)
         q2_loss = F.mse_loss(target, q2)
+
+        # 更新價值網路 (6)
         critic_loss = q1_loss + q2_loss
         critic_loss.backward()
 
+        # 更新價值網路 (6)
         self.critic_1.optimizer.step()
         self.critic_2.optimizer.step()
 
@@ -112,14 +140,18 @@ class Agent():
         if self.learn_step_cntr % self.update_actor_iter != 0:
             return
 
+        # 更新策略網路 (7)
         self.actor.optimizer.zero_grad()
         actor_q1_loss = self.critic_1.forward(state, self.actor.forward(state))
         actor_loss = -T.mean(actor_q1_loss)
         actor_loss.backward()
         self.actor.optimizer.step()
 
+        # 更新目標網路 (7)
         self.update_network_parameters()
 
+    # Update target network parameter with network parameters.
+    # Reference: p.161
     def update_network_parameters(self, tau=None):
         if tau is None:
             tau = self.tau

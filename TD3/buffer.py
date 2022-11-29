@@ -3,6 +3,7 @@ import numpy as np
 class ReplayBuffer():
     def __init__(self, max_size, input_shape, n_actions):
         self.mem_size = max_size
+        # For recording the index of last data.
         self.mem_cntr = 0
         self.state_memory = np.zeros((self.mem_size, *input_shape))
         self.new_state_memory = np.zeros((self.mem_size, *input_shape))
@@ -23,6 +24,7 @@ class ReplayBuffer():
     def sample_buffer(self, batch_size):
         max_mem = min(self.mem_cntr, self.mem_size)
 
+        # Select the random index whose size is batch_size.
         batch = np.random.choice(max_mem, batch_size)
 
         states = self.state_memory[batch]

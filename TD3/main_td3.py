@@ -20,16 +20,23 @@ if __name__ == '__main__':
     #agent.load_models()
 
     for i in range(n_games):
+        # Old state
         observation = env.reset()
         done = False
         score = 0
         while not done:
+            # Agent choose action based on old state.
             action = agent.choose_action(observation)
+            # Get new state, reward, and done.
             observation_, reward, done, info = env.step(action)
+            # Store all data to replay buffer.
             agent.remember(observation, action, reward, observation_, done)
+            # Train the agent.
             agent.learn()
+            # Score is the accumulation of reward in this game.
             score += reward
             observation = observation_
+
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
 
